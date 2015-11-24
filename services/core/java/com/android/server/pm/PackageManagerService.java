@@ -7100,7 +7100,7 @@ public class PackageManagerService extends IPackageManager.Stub
         }
 
         PackageManagerService m = new PackageManagerService(injector, onlyCore, factoryTest,
-                Build.FINGERPRINT, Build.IS_ENG, Build.IS_USERDEBUG, Build.VERSION.SDK_INT,
+                Build.DATE, Build.IS_ENG, Build.IS_USERDEBUG, Build.VERSION.SDK_INT,
                 Build.VERSION.INCREMENTAL);
         t.traceEnd(); // "create package manager"
 
@@ -7590,7 +7590,7 @@ public class PackageManagerService extends IPackageManager.Stub
                     !buildFingerprint.equals(ver.fingerprint);
             if (mIsUpgrade) {
                 PackageManagerServiceUtils.logCriticalInfo(Log.INFO,
-                        "Upgrading from " + ver.fingerprint + " to " + Build.FINGERPRINT);
+                        "Upgrading from " + ver.fingerprint + " to " + Build.DATE);
             }
 
             // when upgrading from pre-M, promote system app permissions from install to runtime
@@ -7978,7 +7978,7 @@ public class PackageManagerService extends IPackageManager.Stub
             // this situation.
             if (mIsUpgrade) {
                 Slog.i(TAG, "Build fingerprint changed from " + ver.fingerprint + " to "
-                        + Build.FINGERPRINT + "; regranting permissions for internal storage");
+                        + Build.DATE + "; regranting permissions for internal storage");
             }
             mPermissionManager.onStorageVolumeMounted(
                     StorageManager.UUID_PRIVATE_INTERNAL, mIsUpgrade);
@@ -25548,10 +25548,10 @@ public class PackageManagerService extends IPackageManager.Stub
         }
 
         synchronized (mLock) {
-            final boolean isUpgrade = !Build.FINGERPRINT.equals(ver.fingerprint);
+            final boolean isUpgrade = !Build.DATE.equals(ver.fingerprint);
             if (isUpgrade) {
                 logCriticalInfo(Log.INFO, "Build fingerprint changed from " + ver.fingerprint
-                        + " to " + Build.FINGERPRINT + "; regranting permissions for "
+                        + " to " + Build.DATE + "; regranting permissions for "
                         + volumeUuid);
             }
             mPermissionManager.onStorageVolumeMounted(volumeUuid, isUpgrade);
