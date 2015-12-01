@@ -5581,6 +5581,11 @@ public final class Settings {
          */
         public static final String QS_TRANSPARENCY = "qs_transparency";
 
+        /** Volume rocker wake
+         * @hide
+         */
+        public static final String VOLUME_ROCKER_WAKE = "volume_rocker_wake";
+
         /**
          * These are all public system settings
          *
@@ -5695,6 +5700,7 @@ public final class Settings {
             PRIVATE_SETTINGS.add(VIBRATE_ON_DISCONNECT);
             PRIVATE_SETTINGS.add(LOCKSCREEN_BATTERY_INFO);
             PRIVATE_SETTINGS.add(BACK_GESTURE_HAPTIC);
+            PRIVATE_SETTINGS.add(VOLUME_ROCKER_WAKE);
         }
 
         /**
