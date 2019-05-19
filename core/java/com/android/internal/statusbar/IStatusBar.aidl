@@ -289,4 +289,6 @@ oneway interface IStatusBar
      * SpiceOS
      */
     void toggleCameraFlash();
+    void toggleCameraFlashState(boolean enable);
+
 }

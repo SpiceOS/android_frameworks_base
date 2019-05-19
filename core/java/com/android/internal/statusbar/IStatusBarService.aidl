@@ -167,4 +167,5 @@ interface IStatusBarService
      * SpiceOS
      */
     void toggleCameraFlash();
+    void toggleCameraFlashState(boolean enable);
 }
