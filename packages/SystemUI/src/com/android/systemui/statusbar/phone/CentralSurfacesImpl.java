@@ -69,6 +69,8 @@ import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
 import android.content.res.Configuration;
 import android.database.ContentObserver;
+import android.content.res.Resources;
+import android.database.ContentObserver;
 import android.graphics.Point;
 import android.hardware.devicestate.DeviceStateManager;
 import android.metrics.LogMaker;
@@ -4054,6 +4056,9 @@ public class CentralSurfacesImpl extends CoreStartable implements
             resolver.registerContentObserver(Settings.System.getUriFor(
                     Settings.System.DOUBLE_TAP_SLEEP_GESTURE),
                     false, this, UserHandle.USER_ALL);
+            resolver.registerContentObserver(Settings.System.getUriFor(
+                    Settings.System.LOCKSCREEN_MEDIA_BLUR),
+                    false, this, UserHandle.USER_ALL);
         }
 
         @Override
@@ -4064,6 +4069,9 @@ public class CentralSurfacesImpl extends CoreStartable implements
                     || uri.equals(Settings.System.getUriFor(
                     Settings.System.DOUBLE_TAP_SLEEP_GESTURE))) {
                 setDoubleTapToSleepGesture();
+            } else if (uri.equals(Settings.System.getUriFor(
+                    Settings.System.LOCKSCREEN_MEDIA_BLUR))) {
+                setLockScreenMediaBlurLevel();
             }
         }
 
@@ -4075,6 +4083,16 @@ public class CentralSurfacesImpl extends CoreStartable implements
     private void setDoubleTapToSleepGesture() {
         if (mNotificationShadeWindowViewController != null) {
             mNotificationShadeWindowViewController.setDoubleTapToSleepGesture();
+        }
+    }
+
+        public void update() {
+            setLockScreenMediaBlurLevel();
+        }
+
+    private void setLockScreenMediaBlurLevel() {
+        if (mMediaManager != null) {
+            mMediaManager.setLockScreenMediaBlurLevel();
         }
     }
 
