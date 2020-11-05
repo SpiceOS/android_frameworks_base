@@ -58,4 +58,8 @@
 
     <!-- Whether devices suports in-display fingerprint when screen is off -->
     <java-symbol type="bool" name="config_supportScreenOffUdfps" />
+
+    <!-- Horizon Light -->
+    <java-symbol type="integer" name="config_AmbientPulseLightColor" />
+
 </resources>
