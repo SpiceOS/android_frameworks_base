@@ -79,14 +79,6 @@ public class LockIconView extends FrameLayout implements Dumpable {
 
     void setImageDrawable(Drawable drawable) {
         mLockIcon.setImageDrawable(drawable);
-
-        if (!mUseBackground) return;
-
-        if (drawable == null) {
-            mBgView.setVisibility(View.INVISIBLE);
-        } else {
-            mBgView.setVisibility(View.VISIBLE);
-        }
     }
 
     /**
