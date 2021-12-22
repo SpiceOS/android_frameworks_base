@@ -18,6 +18,8 @@ package com.android.server.hdmi;
 
 import android.annotation.Nullable;
 
+import com.android.server.hdmi.Constants.FeatureOpcode;
+
 import libcore.util.EmptyArray;
 
 import java.util.Arrays;
@@ -111,18 +113,22 @@ public final class HdmiCecMessage {
 
     @Override
     public String toString() {
-        StringBuffer s = new StringBuffer();
+        StringBuilder s = new StringBuilder();
         s.append(String.format("<%s> %X%X:%02X",
                 opcodeToString(mOpcode), mSource, mDestination, mOpcode));
         if (mParams.length > 0) {
-            for (byte data : mParams) {
-                s.append(String.format(":%02X", data));
+            if (filterMessageParameters(mOpcode)) {
+                s.append(String.format(" <Redacted len=%d>", mParams.length));
+            } else {
+                for (byte data : mParams) {
+                    s.append(String.format(":%02X", data));
+                }
             }
         }
         return s.toString();
     }
 
-    private static String opcodeToString(int opcode) {
+    private static String opcodeToString(@FeatureOpcode int opcode) {
         switch (opcode) {
             case Constants.MESSAGE_FEATURE_ABORT:
                 return "Feature Abort";
@@ -260,6 +266,14 @@ public final class HdmiCecMessage {
                 return "Request ARC Initiation";
             case Constants.MESSAGE_REQUEST_ARC_TERMINATION:
                 return "Request ARC Termination";
+            case Constants.MESSAGE_GIVE_FEATURES:
+                return "Give Features";
+            case Constants.MESSAGE_REPORT_FEATURES:
+                return "Report Features";
+            case Constants.MESSAGE_REQUEST_CURRENT_LATENCY:
+                return "Request Current Latency";
+            case Constants.MESSAGE_REPORT_CURRENT_LATENCY:
+                return "Report Current Latency";
             case Constants.MESSAGE_TERMINATE_ARC:
                 return "Terminate ARC";
             case Constants.MESSAGE_CDC_MESSAGE:
@@ -268,6 +282,22 @@ public final class HdmiCecMessage {
                 return "Abort";
             default:
                 return String.format("Opcode: %02X", opcode);
+        }
+    }
+
+    private static boolean filterMessageParameters(int opcode) {
+        switch (opcode) {
+            case Constants.MESSAGE_USER_CONTROL_PRESSED:
+            case Constants.MESSAGE_USER_CONTROL_RELEASED:
+            case Constants.MESSAGE_SET_OSD_NAME:
+            case Constants.MESSAGE_SET_OSD_STRING:
+            case Constants.MESSAGE_VENDOR_COMMAND:
+            case Constants.MESSAGE_VENDOR_REMOTE_BUTTON_DOWN:
+            case Constants.MESSAGE_VENDOR_REMOTE_BUTTON_UP:
+            case Constants.MESSAGE_VENDOR_COMMAND_WITH_ID:
+                return true;
+            default:
+                return false;
         }
     }
 }

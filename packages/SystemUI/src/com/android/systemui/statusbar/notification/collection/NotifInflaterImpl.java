@@ -16,29 +16,22 @@
 
 package com.android.systemui.statusbar.notification.collection;
 
-import static android.service.notification.NotificationStats.DISMISS_SENTIMENT_NEUTRAL;
-
-import android.service.notification.NotificationStats;
-
 import com.android.internal.statusbar.IStatusBarService;
-import com.android.internal.statusbar.NotificationVisibility;
+import com.android.systemui.dagger.SysUISingleton;
 import com.android.systemui.statusbar.notification.InflationException;
 import com.android.systemui.statusbar.notification.collection.inflation.NotifInflater;
 import com.android.systemui.statusbar.notification.collection.inflation.NotificationRowBinderImpl;
-import com.android.systemui.statusbar.notification.collection.notifcollection.DismissedByUserStats;
-import com.android.systemui.statusbar.notification.logging.NotificationLogger;
 import com.android.systemui.statusbar.notification.row.NotifInflationErrorManager;
 import com.android.systemui.statusbar.notification.row.NotificationContentInflater;
 
 import javax.inject.Inject;
-import javax.inject.Singleton;
 
 /**
  * Handles notification inflating, rebinding, and inflation aborting.
  *
  * Currently a wrapper for NotificationRowBinderImpl.
  */
-@Singleton
+@SysUISingleton
 public class NotifInflaterImpl implements NotifInflater {
 
     private final IStatusBarService mStatusBarService;
@@ -47,7 +40,6 @@ public class NotifInflaterImpl implements NotifInflater {
     private final NotifPipeline mNotifPipeline;
 
     private NotificationRowBinderImpl mNotificationRowBinder;
-    private InflationCallback mExternalInflationCallback;
 
     @Inject
     public NotifInflaterImpl(
@@ -66,17 +58,11 @@ public class NotifInflaterImpl implements NotifInflater {
      */
     public void setRowBinder(NotificationRowBinderImpl rowBinder) {
         mNotificationRowBinder = rowBinder;
-        mNotificationRowBinder.setInflationCallback(mInflationCallback);
     }
 
     @Override
-    public void setInflationCallback(InflationCallback callback) {
-        mExternalInflationCallback = callback;
-    }
-
-    @Override
-    public void rebindViews(NotificationEntry entry) {
-        inflateViews(entry);
+    public void rebindViews(NotificationEntry entry, InflationCallback callback) {
+        inflateViews(entry, callback);
     }
 
     /**
@@ -84,11 +70,13 @@ public class NotifInflaterImpl implements NotifInflater {
      * views are bound.
      */
     @Override
-    public void inflateViews(NotificationEntry entry) {
+    public void inflateViews(NotificationEntry entry, InflationCallback callback) {
         try {
-            requireBinder().inflateViews(entry, getDismissCallback(entry));
+            requireBinder().inflateViews(
+                    entry,
+                    wrapInflationCallback(callback));
         } catch (InflationException e) {
-            // logged in mInflationCallback.handleInflationException
+            mNotifErrorManager.setInflationError(entry, e);
         }
     }
 
@@ -97,26 +85,22 @@ public class NotifInflaterImpl implements NotifInflater {
         entry.abortTask();
     }
 
-    private Runnable getDismissCallback(NotificationEntry entry) {
-        return new Runnable() {
+    private NotificationContentInflater.InflationCallback wrapInflationCallback(
+            InflationCallback callback) {
+        return new NotificationContentInflater.InflationCallback() {
             @Override
-            public void run() {
-                int dismissalSurface = NotificationStats.DISMISSAL_SHADE;
-                /*
-                 * TODO: determine dismissal surface (ie: shade / headsup / aod)
-                 * see {@link NotificationLogger#logNotificationClear}
-                 */
-                mNotifCollection.dismissNotification(
-                        entry,
-                        new DismissedByUserStats(
-                                dismissalSurface,
-                                DISMISS_SENTIMENT_NEUTRAL,
-                                NotificationVisibility.obtain(entry.getKey(),
-                                        entry.getRanking().getRank(),
-                                        mNotifPipeline.getShadeListCount(),
-                                        true,
-                                        NotificationLogger.getNotificationLocation(entry))
-                        ));
+            public void handleInflationException(
+                    NotificationEntry entry,
+                    Exception e) {
+                mNotifErrorManager.setInflationError(entry, e);
+            }
+
+            @Override
+            public void onAsyncInflationFinished(NotificationEntry entry) {
+                mNotifErrorManager.clearInflationError(entry);
+                if (callback != null) {
+                    callback.onInflationFinished(entry);
+                }
             }
         };
     }
@@ -128,22 +112,4 @@ public class NotifInflaterImpl implements NotifInflater {
         }
         return mNotificationRowBinder;
     }
-
-    private final NotificationContentInflater.InflationCallback mInflationCallback =
-            new NotificationContentInflater.InflationCallback() {
-                @Override
-                public void handleInflationException(
-                        NotificationEntry entry,
-                        Exception e) {
-                    mNotifErrorManager.setInflationError(entry, e);
-                }
-
-                @Override
-                public void onAsyncInflationFinished(NotificationEntry entry) {
-                    mNotifErrorManager.clearInflationError(entry);
-                    if (mExternalInflationCallback != null) {
-                        mExternalInflationCallback.onInflationFinished(entry);
-                    }
-                }
-            };
 }

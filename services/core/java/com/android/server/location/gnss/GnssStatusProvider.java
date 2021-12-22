@@ -16,32 +16,44 @@
 
 package com.android.server.location.gnss;
 
+import static com.android.server.location.gnss.GnssManagerService.D;
+import static com.android.server.location.gnss.GnssManagerService.TAG;
+
+import android.app.AppOpsManager;
 import android.location.GnssStatus;
 import android.location.IGnssStatusListener;
 import android.location.util.identity.CallerIdentity;
 import android.os.IBinder;
-import android.os.RemoteException;
 import android.stats.location.LocationStatsEnums;
 import android.util.Log;
 
-import com.android.server.location.AppForegroundHelper;
-import com.android.server.location.AppOpsHelper;
-import com.android.server.location.LocationUsageLogger;
-import com.android.server.location.SettingsHelper;
-import com.android.server.location.UserInfoHelper;
+import com.android.server.location.gnss.hal.GnssNative;
+import com.android.server.location.injector.AppOpsHelper;
+import com.android.server.location.injector.Injector;
+import com.android.server.location.injector.LocationUsageLogger;
+
+import java.util.Collection;
 
 /**
  * Implementation of a handler for {@link IGnssStatusListener}.
  */
-public class GnssStatusProvider extends GnssListenerManager<Void, IGnssStatusListener, Void> {
+public class GnssStatusProvider extends
+        GnssListenerMultiplexer<Void, IGnssStatusListener, Void> implements
+        GnssNative.BaseCallbacks, GnssNative.StatusCallbacks, GnssNative.SvStatusCallbacks {
 
+    private final AppOpsHelper mAppOpsHelper;
     private final LocationUsageLogger mLogger;
 
-    public GnssStatusProvider(UserInfoHelper userInfoHelper, SettingsHelper settingsHelper,
-            AppOpsHelper appOpsHelper, AppForegroundHelper appForegroundHelper,
-            LocationUsageLogger logger) {
-        super(userInfoHelper, settingsHelper, appOpsHelper, appForegroundHelper);
-        mLogger = logger;
+    private boolean mIsNavigating = false;
+
+    public GnssStatusProvider(Injector injector, GnssNative gnssNative) {
+        super(injector);
+        mAppOpsHelper = injector.getAppOpsHelper();
+        mLogger = injector.getLocationUsageLogger();
+
+        gnssNative.addBaseCallbacks(this);
+        gnssNative.addStatusCallbacks(this);
+        gnssNative.addSvStatusCallbacks(this);
     }
 
     @Override
@@ -50,105 +62,97 @@ public class GnssStatusProvider extends GnssListenerManager<Void, IGnssStatusLis
     }
 
     @Override
-    protected boolean registerService(Void ignored) {
-        if (GnssManagerService.D) {
-            Log.d(GnssManagerService.TAG, "starting gnss status");
+    protected boolean registerWithService(Void ignored,
+            Collection<GnssListenerRegistration> registrations) {
+        if (D) {
+            Log.d(TAG, "starting gnss status");
         }
         return true;
     }
 
     @Override
-    protected void unregisterService() {
-        if (GnssManagerService.D) {
-            Log.d(GnssManagerService.TAG, "stopping gnss status");
+    protected void unregisterWithService() {
+        if (D) {
+            Log.d(TAG, "stopping gnss status");
         }
     }
 
     @Override
-    protected void onRegistrationAdded(IBinder key, GnssRegistration registration) {
+    protected void onRegistrationAdded(IBinder key, GnssListenerRegistration registration) {
         mLogger.logLocationApiUsage(
                 LocationStatsEnums.USAGE_STARTED,
                 LocationStatsEnums.API_REGISTER_GNSS_STATUS_CALLBACK,
-                registration.getIdentity().packageName,
-                /* LocationRequest= */ null,
-                /* hasListener= */ true,
-                /* hasIntent= */ false,
-                /* geofence= */ null,
+                registration.getIdentity().getPackageName(),
+                registration.getIdentity().getAttributionTag(),
+                null,
+                null,
+                true,
+                false,
+                null, registration.isForeground());
+    }
+
+    @Override
+    protected void onRegistrationRemoved(IBinder key, GnssListenerRegistration registration) {
+        mLogger.logLocationApiUsage(
+                LocationStatsEnums.USAGE_ENDED,
+                LocationStatsEnums.API_REGISTER_GNSS_STATUS_CALLBACK,
+                registration.getIdentity().getPackageName(),
+                registration.getIdentity().getAttributionTag(),
+                null,
+                null,
+                true,
+                false,
+                null,
                 registration.isForeground());
     }
 
     @Override
-    protected void onRegistrationRemoved(IBinder key, GnssRegistration registration) {
-        mLogger.logLocationApiUsage(
-                LocationStatsEnums.USAGE_ENDED,
-                LocationStatsEnums.API_REGISTER_GNSS_STATUS_CALLBACK,
-                registration.getIdentity().packageName,
-                /* LocationRequest= */ null,
-                /* hasListener= */ true,
-                /* hasIntent= */ false,
-                /* geofence= */ null,
-                registration.isForeground());
+    public void onHalRestarted() {
+        resetService();
     }
 
-    /**
-     * Called by GnssLocationProvider.
-     */
-    public void onStatusChanged(boolean isNavigating) {
-        if (isNavigating) {
-            deliverToListeners((listener) -> {
-                try {
-                    listener.onGnssStarted();
-                } catch (RemoteException e) {
-                    // ignore - the listener will get cleaned up later anyways
-                }
-            });
-        } else {
-            deliverToListeners((listener) -> {
-                try {
-                    listener.onGnssStopped();
-                } catch (RemoteException e) {
-                    // ignore - the listener will get cleaned up later anyways
-                }
-            });
+    @Override
+    public void onReportStatus(@GnssNative.StatusCallbacks.GnssStatusValue int gnssStatus) {
+        boolean isNavigating;
+        switch (gnssStatus) {
+            case GNSS_STATUS_SESSION_BEGIN:
+                isNavigating = true;
+                break;
+            case GNSS_STATUS_SESSION_END:
+                // fall through
+            case GNSS_STATUS_ENGINE_OFF:
+                isNavigating = false;
+                break;
+            default:
+                isNavigating = mIsNavigating;
+        }
+
+        if (isNavigating != mIsNavigating) {
+            mIsNavigating = isNavigating;
+            if (isNavigating) {
+                deliverToListeners(IGnssStatusListener::onGnssStarted);
+            } else {
+                deliverToListeners(IGnssStatusListener::onGnssStopped);
+            }
         }
     }
 
-    /**
-     * Called by GnssLocationProvider.
-     */
-    public void onFirstFix(int ttff) {
-        deliverToListeners((listener) -> {
-            try {
-                listener.onFirstFix(ttff);
-            } catch (RemoteException e) {
-                // ignore - the listener will get cleaned up later anyways
-            }
+    @Override
+    public void onReportFirstFix(int ttff) {
+        deliverToListeners(listener -> {
+            listener.onFirstFix(ttff);
         });
     }
 
-    /**
-     * Called by GnssLocationProvider.
-     */
-    public void onSvStatusChanged(GnssStatus gnssStatus) {
-        deliverToListeners((listener) -> {
-            try {
-                listener.onSvStatusChanged(gnssStatus);
-            } catch (RemoteException e) {
-                // ignore - the listener will get cleaned up later anyways
+    @Override
+    public void onReportSvStatus(GnssStatus gnssStatus) {
+        deliverToListeners(registration -> {
+            if (mAppOpsHelper.noteOpNoThrow(AppOpsManager.OP_FINE_LOCATION,
+                    registration.getIdentity())) {
+                return listener -> listener.onSvStatusChanged(gnssStatus);
+            } else {
+                return null;
             }
-        }, registration -> mAppOpsHelper.noteLocationAccess(registration.getIdentity()));
-    }
-
-    /**
-     * Called by GnssLocationProvider.
-     */
-    public void onNmeaReceived(long timestamp, String nmea) {
-        deliverToListeners((listener) -> {
-            try {
-                listener.onNmeaReceived(timestamp, nmea);
-            } catch (RemoteException e) {
-                // ignore - the listener will get cleaned up later anyways
-            }
-        }, registration -> mAppOpsHelper.noteLocationAccess(registration.getIdentity()));
+        });
     }
 }

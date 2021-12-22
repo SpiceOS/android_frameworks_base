@@ -95,14 +95,7 @@ class IconManager @Inject constructor(
         // Construct the shelf icon view.
         val shelfIcon = iconBuilder.createIconView(entry)
         shelfIcon.scaleType = ImageView.ScaleType.CENTER_INSIDE
-
         shelfIcon.visibility = View.INVISIBLE
-        // TODO: This doesn't belong here
-        shelfIcon.setOnVisibilityChangedListener { newVisibility: Int ->
-            if (entry.row != null) {
-                entry.row.setShelfIconVisible(newVisibility == View.VISIBLE)
-            }
-        }
 
         // Construct the aod icon view.
         val aodIcon = iconBuilder.createIconView(entry)
@@ -170,18 +163,6 @@ class IconManager @Inject constructor(
             it.notification = entry.sbn
             setIcon(entry, sensitiveIconDescriptor, it)
         }
-    }
-
-    /**
-     * Updates tags on the icon views to match the posting app's target SDK level
-     *
-     * Note that this method MUST be called after both [createIcons] and [updateIcons].
-     */
-    fun updateIconTags(entry: NotificationEntry, targetSdk: Int) {
-        setTagOnIconViews(
-                entry.icons,
-                R.id.icon_is_pre_L,
-                targetSdk < Build.VERSION_CODES.LOLLIPOP)
     }
 
     private fun updateIconsSafe(entry: NotificationEntry) {
@@ -259,6 +240,7 @@ class IconManager @Inject constructor(
         iconView: StatusBarIconView
     ) {
         iconView.setShowsConversation(showsConversation(entry, iconView, iconDescriptor))
+        iconView.setTag(R.id.icon_is_pre_L, entry.targetSdk < Build.VERSION_CODES.LOLLIPOP)
         if (!iconView.set(iconDescriptor)) {
             throw InflationException("Couldn't create icon $iconDescriptor")
         }
@@ -266,23 +248,11 @@ class IconManager @Inject constructor(
 
     @Throws(InflationException::class)
     private fun createPeopleAvatar(entry: NotificationEntry): Icon? {
-        // Attempt to extract form shortcut.
-        val conversationId = entry.ranking.channel.conversationId
-        val query = LauncherApps.ShortcutQuery()
-                .setPackage(entry.sbn.packageName)
-                .setQueryFlags(
-                        LauncherApps.ShortcutQuery.FLAG_MATCH_DYNAMIC
-                                or LauncherApps.ShortcutQuery.FLAG_MATCH_PINNED)
-                .setShortcutIds(listOf(conversationId))
-        val shortcuts = launcherApps.getShortcuts(query, entry.sbn.user)
         var ic: Icon? = null
-        if (shortcuts != null && shortcuts.isNotEmpty()) {
-            ic = shortcuts[0].icon
-        }
 
-        // Fall back to notification large icon if available
-        if (ic == null) {
-            ic = entry.sbn.notification.getLargeIcon()
+        val shortcut = entry.ranking.conversationShortcutInfo
+        if (shortcut != null) {
+            ic = launcherApps.getShortcutIcon(shortcut)
         }
 
         // Fall back to extract from message
@@ -299,6 +269,11 @@ class IconManager @Inject constructor(
                     break
                 }
             }
+        }
+
+        // Fall back to notification large icon if available
+        if (ic == null) {
+            ic = entry.sbn.notification.getLargeIcon()
         }
 
         // Revert to small icon if still not available
@@ -326,19 +301,12 @@ class IconManager @Inject constructor(
         val usedInSensitiveContext =
                 iconView === entry.icons.shelfIcon || iconView === entry.icons.aodIcon
         val isSmallIcon = iconDescriptor.icon.equals(entry.sbn.notification.smallIcon)
-        return isImportantConversation(entry) && !isSmallIcon
-                && (!usedInSensitiveContext || !entry.isSensitive)
+        return isImportantConversation(entry) && !isSmallIcon &&
+                (!usedInSensitiveContext || !entry.isSensitive)
     }
 
     private fun isImportantConversation(entry: NotificationEntry): Boolean {
         return entry.ranking.channel != null && entry.ranking.channel.isImportantConversation
-    }
-
-    private fun setTagOnIconViews(icons: IconPack, key: Int, tag: Any) {
-        icons.statusBarIcon?.setTag(key, tag)
-        icons.shelfIcon?.setTag(key, tag)
-        icons.aodIcon?.setTag(key, tag)
-        icons.centeredIcon?.setTag(key, tag)
     }
 }
 

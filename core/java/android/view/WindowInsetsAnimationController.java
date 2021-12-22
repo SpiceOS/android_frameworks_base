@@ -99,7 +99,7 @@ public interface WindowInsetsAnimationController {
     float getCurrentAlpha();
 
     /**
-     * @return The {@link InsetsType}s this object is currently controlling.
+     * @return The {@link WindowInsets.Type}s this object is currently controlling.
      */
     @InsetsType int getTypes();
 
@@ -141,7 +141,10 @@ public interface WindowInsetsAnimationController {
     /**
      * Finishes the animation, and leaves the windows shown or hidden.
      * <p>
-     * After invoking {@link #finish(boolean)}, this instance is no longer {@link #isReady ready}.
+     * After invoking {@link #finish}, this instance is no longer {@link #isReady ready}.
+     * <p>
+     * Note: Finishing an animation implicitly {@link #setInsetsAndAlpha sets insets and alpha}
+     * according to the requested end state without any further animation.
      *
      * @param shown if {@code true}, the windows will be shown after finishing the
      *              animation. Otherwise they will be hidden.
@@ -178,4 +181,11 @@ public interface WindowInsetsAnimationController {
      * @return {@code true} if the instance is cancelled, {@code false} otherwise.
      */
     boolean isCancelled();
+
+    /**
+     * @hide
+     * @return {@code true} when controller controls IME and IME has no insets (floating,
+     *  fullscreen or non-overlapping).
+     */
+    boolean hasZeroInsetsIme();
 }

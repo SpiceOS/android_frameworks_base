@@ -91,7 +91,7 @@ static constexpr float EOCF_sRGB(float srgb) {
 }
 
 #ifdef __ANDROID__ // Layoutlib does not support hardware buffers or native windows
-ANDROID_API SkImageInfo ANativeWindowToImageInfo(const ANativeWindow_Buffer& buffer,
+SkImageInfo ANativeWindowToImageInfo(const ANativeWindow_Buffer& buffer,
                                                  sk_sp<SkColorSpace> colorSpace);
 
 SkImageInfo BufferDescriptionToImageInfo(const AHardwareBuffer_Desc& bufferDesc,
@@ -126,6 +126,7 @@ struct Lab {
 
 Lab sRGBToLab(SkColor color);
 SkColor LabToSRGB(const Lab& lab, SkAlpha alpha);
+skcms_TransferFunction GetPQSkTransferFunction(float sdr_white_level = 0.f);
 
 } /* namespace uirenderer */
 } /* namespace android */

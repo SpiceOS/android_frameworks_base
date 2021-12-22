@@ -82,6 +82,8 @@ public class SignalStrength implements Parcelable {
     // Effectively final. Timestamp is set during construction of SignalStrength
     private long mTimestampMillis;
 
+    private boolean mLteAsPrimaryInNrNsa = true;
+
     CellSignalStrengthCdma mCdma;
     CellSignalStrengthGsm mGsm;
     CellSignalStrengthWcdma mWcdma;
@@ -185,9 +187,28 @@ public class SignalStrength implements Parcelable {
                 new CellSignalStrengthNr(signalStrength.nr));
     }
 
+    /**
+     * Constructor for Radio HAL V1.6.
+     *
+     * @param signalStrength signal strength reported from modem.
+     * @hide
+     */
+    public SignalStrength(android.hardware.radio.V1_6.SignalStrength signalStrength) {
+        this(new CellSignalStrengthCdma(signalStrength.cdma, signalStrength.evdo),
+                new CellSignalStrengthGsm(signalStrength.gsm),
+                new CellSignalStrengthWcdma(signalStrength.wcdma),
+                new CellSignalStrengthTdscdma(signalStrength.tdscdma),
+                new CellSignalStrengthLte(signalStrength.lte),
+                new CellSignalStrengthNr(signalStrength.nr));
+    }
+
     private CellSignalStrength getPrimary() {
         // This behavior is intended to replicate the legacy behavior of getLevel() by prioritizing
         // newer faster RATs for default/for display purposes.
+
+        if (mLteAsPrimaryInNrNsa) {
+            if (mLte.isValid()) return mLte;
+        }
         if (mNr.isValid()) return mNr;
         if (mLte.isValid()) return mLte;
         if (mCdma.isValid()) return mCdma;
@@ -268,6 +289,10 @@ public class SignalStrength implements Parcelable {
 
     /** @hide */
     public void updateLevel(PersistableBundle cc, ServiceState ss) {
+        if (cc != null) {
+            mLteAsPrimaryInNrNsa = cc.getBoolean(
+                    CarrierConfigManager.KEY_SIGNAL_STRENGTH_NR_NSA_USE_LTE_AS_PRIMARY_BOOL, true);
+        }
         mCdma.updateLevel(cc, ss);
         mGsm.updateLevel(cc, ss);
         mWcdma.updateLevel(cc, ss);
@@ -277,11 +302,9 @@ public class SignalStrength implements Parcelable {
     }
 
     /**
-     * Copy constructors
+     * This constructor is used to create a copy of an existing SignalStrength object.
      *
      * @param s Source SignalStrength
-     *
-     * @hide
      */
     public SignalStrength(@NonNull SignalStrength s) {
         copyFrom(s);

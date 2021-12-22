@@ -25,12 +25,15 @@ import android.annotation.IntDef;
 import android.annotation.NonNull;
 import android.annotation.Nullable;
 import android.annotation.SystemApi;
-import android.annotation.TestApi;
 import android.app.Service;
+import android.app.assist.AssistStructure.ViewNode;
+import android.app.assist.AssistStructure.ViewNodeParcelable;
 import android.content.ComponentName;
 import android.content.Intent;
 import android.graphics.Rect;
+import android.os.BaseBundle;
 import android.os.Build;
+import android.os.Bundle;
 import android.os.CancellationSignal;
 import android.os.Handler;
 import android.os.IBinder;
@@ -68,7 +71,6 @@ import java.util.List;
  * @hide
  */
 @SystemApi
-@TestApi
 public abstract class AugmentedAutofillService extends Service {
 
     private static final String TAG = AugmentedAutofillService.class.getSimpleName();
@@ -131,6 +133,7 @@ public abstract class AugmentedAutofillService extends Service {
     public void onCreate() {
         super.onCreate();
         mHandler = new Handler(Looper.getMainLooper(), null, true);
+        BaseBundle.setShouldDefuse(true);
     }
 
     /** @hide */
@@ -160,14 +163,18 @@ public abstract class AugmentedAutofillService extends Service {
     }
 
     /**
-     * The child class of the service can call this method to initiate an Autofill flow.
+     * The child class of the service can call this method to initiate a new Autofill flow. If all
+     * conditions are met, it will make a request to the client app process to explicitly cancel
+     * the current autofill session and create a new session. For example, an augmented autofill
+     * service may notice some events which make it think a good time to provide updated
+     * augmented autofill suggestions.
      *
      * <p> The request would be respected only if the previous augmented autofill request was
      * made for the same {@code activityComponent} and {@code autofillId}, and the field is
      * currently on focus.
      *
-     * <p> The request would start a new autofill flow. It doesn't guarantee that the
-     * {@link AutofillManager} will proceed with the request.
+     * <p> The request would cancel the current session and start a new autofill flow.
+     * It doesn't guarantee that the {@link AutofillManager} will proceed with the request.
      *
      * @param activityComponent the client component for which the autofill is requested for
      * @param autofillId        the client field id for which the autofill is requested for
@@ -176,8 +183,6 @@ public abstract class AugmentedAutofillService extends Service {
      */
     public final boolean requestAutofill(@NonNull ComponentName activityComponent,
             @NonNull AutofillId autofillId) {
-        // TODO(b/149531989): revisit this. The request should start a new autofill session
-        //  rather than reusing the existing session.
         final AutofillProxy proxy = mAutofillProxyForLastRequest;
         if (proxy == null || !proxy.mComponentName.equals(activityComponent)
                 || !proxy.mFocusedId.equals(autofillId)) {
@@ -199,7 +204,7 @@ public abstract class AugmentedAutofillService extends Service {
      * <ul>
      *   <li>Service does not recognize what should be autofilled.
      *   <li>Service does not have data to fill the request.
-     *   <li>Service blacklisted that app (or activity) for autofill.
+     *   <li>Service denylisted that app (or activity) for autofill.
      *   <li>App disabled itself for autofill.
      * </ul>
      *
@@ -412,6 +417,8 @@ public abstract class AugmentedAutofillService extends Service {
         @GuardedBy("mLock")
         private AutofillValue mFocusedValue;
         @GuardedBy("mLock")
+        private ViewNode mFocusedViewNode;
+        @GuardedBy("mLock")
         private IFillCallback mCallback;
 
         /**
@@ -529,6 +536,7 @@ public abstract class AugmentedAutofillService extends Service {
             synchronized (mLock) {
                 mFocusedId = focusedId;
                 mFocusedValue = focusedValue;
+                mFocusedViewNode = null;
                 if (mCallback != null) {
                     try {
                         if (!mCallback.isCompleted()) {
@@ -558,11 +566,31 @@ public abstract class AugmentedAutofillService extends Service {
             }
         }
 
-        void reportResult(@Nullable List<Dataset> inlineSuggestionsData) {
+        void reportResult(@Nullable List<Dataset> inlineSuggestionsData,
+                @Nullable Bundle clientState, boolean showingFillWindow) {
             try {
-                mCallback.onSuccess(inlineSuggestionsData);
+                mCallback.onSuccess(inlineSuggestionsData, clientState, showingFillWindow);
             } catch (RemoteException e) {
                 Log.e(TAG, "Error calling back with the inline suggestions data: " + e);
+            }
+        }
+
+        @Nullable
+        public ViewNode getFocusedViewNode() {
+            synchronized (mLock) {
+                if (mFocusedViewNode == null) {
+                    try {
+                        final ViewNodeParcelable viewNodeParcelable = mClient.getViewNodeParcelable(
+                                mFocusedId);
+                        if (viewNodeParcelable != null) {
+                            mFocusedViewNode = viewNodeParcelable.getViewNode();
+                        }
+                    } catch (RemoteException e) {
+                        Log.e(TAG, "Error getting the ViewNode of the focused view: " + e);
+                        return null;
+                    }
+                }
+                return mFocusedViewNode;
             }
         }
 
@@ -590,7 +618,7 @@ public abstract class AugmentedAutofillService extends Service {
                         mFirstOnSuccessTime = SystemClock.elapsedRealtime();
                         duration = mFirstOnSuccessTime - mFirstRequestTime;
                         if (sDebug) {
-                            Log.d(TAG, "Service responded nothing in " + formatDuration(duration));
+                            Log.d(TAG, "Inline response in " + formatDuration(duration));
                         }
                     }
                 } break;
