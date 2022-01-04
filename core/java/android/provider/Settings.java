@@ -5824,6 +5824,12 @@ public final class Settings {
         public static final String SMART_PIXELS_ON_POWER_SAVE = "smart_pixels_on_power_save";
 
         /**
+         * Defines the screen-off animation to display
+         * @hide
+         */
+        public static final String SCREEN_OFF_ANIMATION = "screen_off_animation";
+
+        /**
          * These are all public system settings
          *
          * @hide
