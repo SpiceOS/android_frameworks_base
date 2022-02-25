@@ -5548,6 +5548,12 @@ public final class Settings {
          */
         public static final String VOLBTN_MUSIC_CONTROLS = "volbtn_music_controls";
 
+        /** Whether to show data usage in qs footer
+        * @hide
+        */
+       public static final String QS_FOOTER_DATA_USAGE = "qs_footer_data_usage";        
+
+
         /**
          * IMPORTANT: If you add a new public settings you also have to add it to
          * PUBLIC_SETTINGS below. If the new setting is hidden you have to add
