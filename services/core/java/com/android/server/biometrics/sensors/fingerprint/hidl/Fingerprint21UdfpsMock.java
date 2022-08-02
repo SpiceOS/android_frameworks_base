@@ -136,7 +136,7 @@ public class Fingerprint21UdfpsMock extends Fingerprint21 implements TrustManage
     private static class TestableBiometricScheduler extends BiometricScheduler {
         @NonNull private Fingerprint21UdfpsMock mFingerprint21;
 
-        TestableBiometricScheduler(Context context, @NonNull String tag, @NonNull Handler handler,
+        TestableBiometricScheduler(Context context,@NonNull String tag, @NonNull Handler handler,
                 @Nullable GestureAvailabilityDispatcher gestureAvailabilityDispatcher) {
             super(context, tag, BiometricScheduler.SENSOR_TYPE_FP_OTHER, gestureAvailabilityDispatcher);
         }
